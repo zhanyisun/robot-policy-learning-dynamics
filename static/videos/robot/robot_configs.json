@@ -1,0 +1,102 @@
+[
+ {
+  "config": 1,
+  "selected": 3,
+  "final": 4
+ },
+ {
+  "config": 2,
+  "selected": 3,
+  "final": 5
+ },
+ {
+  "config": 3,
+  "selected": 2,
+  "final": 0
+ },
+ {
+  "config": 4,
+  "selected": 3,
+  "final": 0
+ },
+ {
+  "config": 5,
+  "selected": 1,
+  "final": 1
+ },
+ {
+  "config": 6,
+  "selected": 2,
+  "final": 0
+ },
+ {
+  "config": 7,
+  "selected": 2,
+  "final": 0
+ },
+ {
+  "config": 8,
+  "selected": 1,
+  "final": 4
+ },
+ {
+  "config": 9,
+  "selected": 0,
+  "final": 3
+ },
+ {
+  "config": 10,
+  "selected": 4,
+  "final": 4
+ },
+ {
+  "config": 11,
+  "selected": 2,
+  "final": 2
+ },
+ {
+  "config": 12,
+  "selected": 4,
+  "final": 2
+ },
+ {
+  "config": 13,
+  "selected": 4,
+  "final": 5
+ },
+ {
+  "config": 14,
+  "selected": 4,
+  "final": 3
+ },
+ {
+  "config": 15,
+  "selected": 4,
+  "final": 3
+ },
+ {
+  "config": 16,
+  "selected": 5,
+  "final": 5
+ },
+ {
+  "config": 17,
+  "selected": 5,
+  "final": 5
+ },
+ {
+  "config": 18,
+  "selected": 3,
+  "final": 1
+ },
+ {
+  "config": 19,
+  "selected": 5,
+  "final": 5
+ },
+ {
+  "config": 20,
+  "selected": 5,
+  "final": 0
+ }
+]

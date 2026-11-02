@@ -1,15 +1,756 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    html, body { height: 100%; margin: 0; background: #fff; }
-    body { display: flex; align-items: center; justify-content: center; }
-    img { width: min(320px, 70vw); height: auto; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description"
+  content="Coverage and reliability dynamics in robot policy pretraining: pass@k, offline checkpoint selection, and generative augmentation.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #ffffff;
+    --ink: #1d1d1f;
+    --muted: #6b6870;
+    --rule: #e6e3ec;
+    --wash: #f6f4f9;
+    --accent: #594388;        
+    --accent-soft: #ece7f5;
+    --serif: "Palatino Linotype", Palatino, "Book Antiqua", "P052", "URW Palladio L", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --col: 880px;             
+    --rail: 190px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--serif); font-size: 17px; line-height: 1.66;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px;
+    border-radius: 3px; }
+
+  .page {
+    display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); gap: 36px;
+    max-width: calc(var(--rail) + var(--col) + 36px + 64px); margin: 0 auto;
+    padding-block: 56px 96px;
+    padding-left: max(32px, env(safe-area-inset-left, 0px));
+      padding-right: max(32px, env(safe-area-inset-right, 0px));
+  }
+
+  /* ---------- contents rail ---------- */
+  nav.toc {
+    position: sticky; top: 0; align-self: start; height: 100vh; display: flex; flex-direction: column;
+      justify-content: center;
+    font-family: var(--sans); font-size: 14.5px; line-height: 1.4;
+  }
+  nav.toc .label { text-transform: uppercase; letter-spacing: 0.09em; font-size: 12px; color: var(--muted);
+    margin-bottom: 12px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--rule); }
+  nav.toc li a {
+    display: grid; grid-template-columns: 1.4em 1fr; padding: 6px 0 6px 14px; margin-left: -1px;
+    color: var(--muted); text-decoration: none; border-left: 2px solid transparent;
+  }
+  nav.toc li a:hover { color: var(--ink); }
+  nav.toc li a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+  nav.toc li a span:first-child { font-variant-numeric: tabular-nums; }
+
+  main { min-width: 0; }
+  main > * { max-width: var(--col); margin-left: auto; margin-right: auto; }
+  main > figure.medium { max-width: 520px; }
+  main > figure.small, main > .figpair { max-width: 750px; }   /* one step down from the full column */
+
+  /* ---------- header ---------- */
+  header.title { text-align: center; margin-bottom: 40px; }
+  header.title h1 { font-size: 36px; line-height: 1.18; margin: 0 0 6px; font-weight: 700;
+    letter-spacing: -0.005em; text-wrap: balance; }
+  header.title h1 .sub { display: block; font-size: 22px; font-weight: 400; color: #48484d; margin-top: 8px; }
+  .authors { font-size: 16.5px; margin-top: 24px; }
+  .authors span + span { margin-left: 1.4em; }
+  .authors a { color: inherit; text-decoration: none; }
+  .authors a:hover { color: var(--accent); text-decoration: underline; }
+  .affil { font-size: 14.5px; color: var(--muted); margin-top: 4px; }
+  .affil span + span { margin-left: 1.6em; }
+  .note { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+  .note code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px; }
+  .links { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 24px;
+    font-family: var(--sans); }
+  .links a {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 999px;
+    background: var(--ink); color: #fff; text-decoration: none; font-size: 14.5px; font-weight: 500;
+  }
+  .links a:hover { background: var(--accent); }
+  .links svg { width: 15px; height: 15px; }
+
+  /* ---------- text ---------- */
+  h2 {
+    font-size: 24px; line-height: 1.25; margin: 64px auto 16px; padding-top: 8px; text-wrap: pretty;
+    scroll-margin-top: 24px;
+  }
+  h2 .num { color: var(--accent); margin-right: 0.35em; }
+  p { margin: 0 auto 1.05em; }
+  .lede { font-size: 1.05em; }
+  strong { font-weight: 700; }
+  .question { color: var(--accent); }
+  sup { line-height: 0; font-size: 0.68em; }
+  a.cite { text-decoration: none; font-family: var(--sans); font-size: 0.78em; font-weight: 600;
+    vertical-align: 0.06em; }
+
+  /* ---------- figures ---------- */
+  figure { margin: 34px auto 34px; scroll-margin-top: 24px; }
+  figure img, figure video { display: block; width: 100%; max-width: 100%; height: auto; border-radius: 4px; }
+  figure video { background: #fff; }
+  figcaption { font-size: 14px; line-height: 1.55; color: var(--muted); margin-top: 12px; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+  .figpair { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; margin: 34px auto;
+    }
+  .figpair figure { margin: 0; }
+  .placeholder {
+    aspect-ratio: 16 / 9; border: 1px dashed #cfcadb; border-radius: 6px; background: var(--wash);
+    display: grid; place-items: center; text-align: center; padding: 12px; color: var(--muted);
+      font-family: var(--sans); font-size: 14px;
+  }
+  .robot-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 12px;
+    font-family: var(--sans); font-size: 14px; }
+  .robot-bar label { font-weight: 600; }
+  .robot-bar select { font: inherit; padding: 5px 30px 5px 10px; border: 1px solid #cfcadb; border-radius: 6px;
+    background: #fff; color: var(--ink); cursor: pointer; }
+  .robot-bar .robot-note { margin-left: auto; color: var(--muted); }
+  .robot-rows { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin-top: 8px;
+    font-family: var(--sans); font-size: 13.5px; color: var(--muted); }
+  .robot-rows b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- fold-out asides ---------- */
+  details.aside { border: 1px solid var(--rule); border-radius: 8px; background: var(--wash);
+    margin: 26px auto; }
+  details.aside > summary {
+    cursor: pointer; list-style: none; padding: 14px 20px 14px 46px; font-weight: 600; position: relative;
+  }
+  details.aside > summary::-webkit-details-marker { display: none; }
+  details.aside > summary::before {
+    content: "+"; position: absolute; left: 20px; font-family: var(--sans); color: var(--accent);
+      font-weight: 700;
+  }
+  details.aside[open] > summary::before { content: "\2212"; }
+  details.aside .body { padding: 0 22px 8px 46px; font-size: 16px; }
+
+  /* ---------- references ---------- */
+  .endmark { display: flex; align-items: center; gap: 14px; margin: 56px auto 0; }
+  .endmark::before, .endmark::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
+  .endmark img { width: 34px; height: 34px; }
+  details.refs { margin-top: 28px; }
+  details.refs > summary { cursor: pointer; font-family: var(--sans); font-size: 14px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--muted); }
+  details.refs ol { font-size: 14px; line-height: 1.5; padding-left: 1.6em; margin-top: 16px; }
+  details.refs li { margin-bottom: 10px; scroll-margin-top: 24px; }
+  details.refs li:target { background: var(--accent-soft); border-radius: 4px; }
+  .katex { font-size: 1.04em; }
+  .katex-display { margin: 1em 0; overflow-x: auto; overflow-y: hidden; }
+
+  @media (max-width: 1040px) {
+    .page { grid-template-columns: 1fr; gap: 0; }
+    nav.toc { position: static; height: auto; display: block; margin-bottom: 36px; }
+    nav.toc ol { display: flex; flex-wrap: wrap; gap: 4px 16px; border-left: 0; }
+    nav.toc li a { padding: 2px 0; border-left: 0; }
+  }
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .page { padding-top: 32px; padding-left: max(16px, env(safe-area-inset-left, 0px));
+      padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+    header.title h1 { font-size: 28px; }
+    header.title h1 .sub { font-size: 18.5px; }
+    .figpair { grid-template-columns: 1fr; }
+    .robot-bar .robot-note { margin-left: 0; }
+    .authors span { display: inline-block; margin: 0 0.6em; }
+    .authors span + span { margin-left: 0.6em; }
+    details.aside .body { padding: 0 16px 6px 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
 </head>
 <body>
-  <img src="static/images/yoda-removebg-preview.png" alt="Placeholder image of Yoda">
+<div class="page">
+
+<nav class="toc" aria-label="Contents">
+  <div class="label">Contents</div>
+  <ol>
+    <li><a href="#dynamics"><span>1</span><span>Learning dynamics</span></a></li>
+    <li><a href="#posttraining"><span>2</span><span>Posttraining</span></a></li>
+    <li><a href="#overfitting"><span>3</span><span>Overfitting</span></a></li>
+    <li><a href="#selection"><span>4</span><span>Offline checkpoint selection</span></a></li>
+    <li><a href="#jointaug"><span>5</span><span>Joint augmentation</span></a></li>
+    <li><a href="#real-robot"><span>6</span><span>Real robot</span></a></li>
+    <li><a href="#future"><span>7</span><span>Future directions</span></a></li>
+  </ol>
+</nav>
+
+<main>
+
+<header class="title">
+  <h1>Beyond Validation Loss:<span class="sub">Coverage and Reliability Dynamics in Robot Policy
+    Pretraining</span></h1>
+  <div class="authors">
+    <span><a href="http://zhanyisun.github.io/">Zhanyi Sun</a><sup>1</sup></span><span><a
+      href="https://msimchowitz.github.io/">Max Simchowitz</a><sup>2,*</sup></span><span><a
+      href="https://shurans.github.io/">Shuran Song</a><sup>1,*</sup></span>
+  </div>
+  <div class="affil"><span><sup>1</sup>Stanford University</span><span><sup>2</sup>Carnegie Mellon
+    University</span></div>
+  <div class="note"><sup>*</sup>Equal advising. &nbsp;Correspondence to
+    <code>zhanyis@stanford.edu</code></div>
+  <div class="links">
+    <a href=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path
+      d="M14 2v6h6"/></svg>Paper</a>
+    <a href=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      aria-hidden="true"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>Code</a>
+    <a href=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      aria-hidden="true"><path
+      d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>Models</a>
+    <a href=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg>Video</a>
+  </div>
+</header>
+
+<figure class="wide" id="fig-opening">
+  <img src="static/images/fig1.png"
+    alt="Pass@k during pretraining and posttraining from the selected and final checkpoints, for single-task BC with residual RL and multitask pretraining with SFT.">
+  <figcaption>On both single-task BC pretraining and multitask VLA pretraining, later checkpoints trade
+    coverage (large-$k$ pass@$k$) for reliability (pass@$1$, the mean success rate). Moreover, checkpoints
+    with similar pass@$1$ can lead to different RL or SFT finetuning performance. The checkpoints selected by
+    our <a href="#selection">offline criterion</a> balance coverage and reliability, and lead to
+    better downstream posttraining than the final checkpoints from the same runs.</figcaption>
+</figure>
+
+<p class="lede">Modern robot learning increasingly follows a staged process: generative robot policies are
+  first pretrained on expert demonstrations, then improved through various forms of posttraining (e.g.,
+  reinforcement learning (RL), supervised finetuning (SFT), value-guided steering, etc.). Yet we typically
+  select checkpoints using conventional metrics like validation loss or average task success, which evaluate
+  pretraining in isolation without accounting for downstream posttraining. <strong class="question">What makes
+  a good pretrained policy, not just for direct deployment, but also for posttraining?</strong></p>
+
+<p>In this work, we use pass@$k$ to study the <strong>coverage–reliability dynamics</strong> of generative
+  robot policies. We find that continued supervised pretraining can improve reliability at the expense of coverage, and
+  these changes affect downstream posttraining. We then develop a purely <strong>offline
+  criterion</strong> for selecting checkpoints that balance coverage and reliability, and introduce a
+  generative data augmentation method that <strong>raises the coverage–reliability Pareto
+  frontier</strong>.</p>
+
+<!-- ================================================================ 1 -->
+<h2 id="dynamics"><span class="num">1.</span>Does more pretraining make a policy better at everything? <span role="img" aria-label="thinking face">🤔</span></h2>
+
+<p>We start with a simple question: does supervised pretraining improve success uniformly across initial
+  conditions, or can improvements on some conditions come at the expense of others? Mean task success
+  cannot tell us. Two policies can have similar mean success rate even if one is moderately successful everywhere
+  and the other is very reliable on a small set of easy conditions but rarely succeeds elsewhere.</p>
+
+<p>Pass@$k$ is commonly used to evaluate language models on tasks with verifiable answers, including code
+  generation and mathematical reasoning. The idea is to generate $k$ independent solutions and ask whether any
+  is correct. For robot policies, we do <strong>fixed-start, closed-loop pass@$k$</strong>. We choose a
+  held-out initial task configuration, reset to it, and run $k$ independent rollouts, recording whether at
+  least one succeeds. We then average over many starting configurations.</p>
+
+<p>In language models, different solutions arise from sampling the next-token distribution. In generative
+  robot policies, different initial noise draws produce different action chunks, which lead to different
+  closed-loop trajectories; randomness in environment dynamics can introduce additional variation. Therefore,
+  even with a deterministic sampler, sampling different initial noise produces different rollouts.</p>
+
+<p>At $k = 1$, pass@$k$ is the usual mean task-success rate, which we refer to as
+  <strong>reliability</strong>. Larger-$k$ pass@$k$ reflects whether success remains possible across a broad
+  range of initial conditions, which we refer to as <strong>coverage</strong>. We note that the repeated
+  resets are mainly a diagnostic tool in simulation, where they let us study interesting properties of the
+  policy that average success or validation MSE doesn't reveal <span role="img" aria-label="disguised face">🥸</span>. In <a href="#selection">Section 4</a>, we
+  introduce an offline criterion for balancing coverage and reliability without any closed-loop rollouts.</p>
+
+<p>We train single-task Diffusion Policies
+  on 200 demonstrations per MimicGen task, and π<sub>0.5</sub> on 65 RoboCasa tasks with 100
+  demonstrations per task. In both regimes, we observe the same pattern: pass@$1$ continues to improve, or converges,
+  after larger-$k$ pass@$k$ has already peaked and begun to fall. The larger $k$ is, the earlier its
+  best checkpoint tends to occur. The result can be seen in the pretraining panels of the <a href="#fig-opening">opening figure</a>. One
+  thing I learned from these experiments is that evaluation curves can be very smooth when evaluating on
+  enough initial conditions (500 for all our MimicGen experiments). In the past, I often saw large
+  fluctuations in the success curves of diffusion and flow-matching policies evaluated on smaller sets of
+  initial conditions. Some of those fluctuations could come from the stochasticity of policy rollouts,
+  exacerbated by limited evaluation conditions.</p>
+
+<p>What changes? Early in training, success improves across most of the evaluation distribution. Later, the
+  outcomes become more polarized: conditions on which the robot already succeeds become more reliable, while some harder conditions become even less likely to succeed. In the Threading task, we can see this
+  directly by counting successes over repeated attempts at each fixed starting configuration: later in
+  training, the fraction of configurations with <em>zero</em> successes rises, even as the fraction with many
+  successes also rises. The animation below shows all 500 starting configurations, each shaded by how often
+  its 32 attempts succeed.</p>
+
+<figure class="small">
+  <video class="autoplay" src="static/videos/startrow.mp4" poster="static/videos/startrow_poster.jpg" muted
+    loop playsinline controls preload="metadata"></video>
+  <figcaption><b>Success polarizes across starting configurations (Threading D2).</b> Each cell is one of 500
+    held-out starting configurations, ordered by its mean success rate under the final checkpoint and shaded
+    by the fraction of 32 rollouts that succeed (pink: none). Below, pass@$k$ over training.</figcaption>
+</figure>
+
+<details class="aside">
+  <summary>Why does large-$k$ pass@$k$ start to fall earlier?</summary>
+  <div class="body">
+    <p>Let $q(c)$ be the probability of succeeding in one rollout from initial condition $c$. Assuming
+      independent attempts after resetting to that condition,</p>
+    $$\mathrm{pass@}k = \mathbb{E}_{c}\!\left[1-(1-q(c))^k\right].$$
+    <p>For $k = 1$, we are just averaging $q(c)$. For $k > 1$, the function $f_k(q)=1-(1-q)^k$ is concave,
+      meaning that improvements on already-reliable conditions contribute less than equally sized losses on
+      harder ones. For example, suppose continued training increases the single-rollout success probability on
+      an easy condition from 80% to 90%, but decreases it on a hard condition from 20% to 10%. The average
+      success rate (pass@$1$) remains unchanged at 50%, but pass@$10$ drops from roughly 95% to 83%. The gain on the easy condition barely affects pass@10, while the loss on the hard condition can reduce it. Thus, shifting success probability from harder conditions toward already-reliable ones can
+      lower large-$k$ pass@$k$ even when average success remains unchanged or improves.</p>
+  </div>
+</details>
+
+<p>Coverage can matter for direct deployment when repeated attempts are feasible, particularly on difficult
+  initial configurations where a policy may succeed only rarely. But it is also important for a different
+  reason: it affects how well a policy can be improved after pretraining.</p>
+
+<!-- ================================================================ 2 -->
+<h2 id="posttraining"><span class="num">2.</span>How policy coverage affects posttraining</h2>
+
+<p>Suppose two pretrained checkpoints have nearly the same pass@$1$, but one has substantially higher
+  large-$k$ pass@$k$. Which is more useful for posttraining under a fixed data or interaction budget? To
+  investigate this, we compare the final checkpoint against an earlier checkpoint selected by our offline
+  coverage–reliability balance criterion (introduced in <a href="#selection">Section 4</a>). The selected
+  checkpoint typically retains higher coverage while maintaining comparable pass@$1$. We evaluate this
+  comparison across several posttraining methods, including those that rely on policy-generated rollouts and
+  those that do not.</p>
+
+<p>In <strong>filtered BC</strong>, we collect the same number of rollouts from each checkpoint, retain
+  successful episodes, and use them to retrain a policy. The higher-coverage checkpoint produces successes
+  from a wider range of initial conditions, and the retrained policies achieve higher pass@$1$ and pass@$32$.
+  For <strong>value learning</strong>, we train separate critics on the same expert data augmented with
+  rollouts from each checkpoint. Critics trained with higher-coverage rollouts rank candidate actions more
+  accurately at held-out states.</p>
+
+<p>The difference persists when posttraining updates the policy. With <strong>residual RL</strong>, finetuning
+  from the earlier checkpoint reaches higher success under the same online interaction budget. The effect is
+  not limited to a frozen generative policy plus a learned correction: in experiments with <strong>full-policy
+  RL finetuning</strong>, where the action generator is updated directly, the earlier selected checkpoint also
+  does better on four of five tasks. Check out the paper for comprehensive results!</p>
+
+<p>Perhaps somewhat more surprisingly, the finding also appears when posttraining does not
+  collect new rollouts from the pretrained policy. On RoboCasa, we finetune earlier and final π<sub>0.5</sub>
+  pretraining checkpoints on the same SFT data. The earlier checkpoint, which retains higher large-$k$ pass@$k$ at similar
+  pass@$1$, produces stronger finetuned performance. So the effect is not just that one policy happens to
+  collect more interesting online data.</p>
+
+<details class="aside">
+  <summary>Connection to LLMs?</summary>
+  <div class="body">
+    <p>In LLMs, researchers have shown that better performance before posttraining does not necessarily
+      translate to better performance afterward. Springer et al. <a class="cite" href="#ref-1">[1]</a> find
+      that longer pretraining can improve a language model's performance before finetuning while hurting its
+      performance after finetuning. Chen et al.'s <em>Coverage Principle</em> <a class="cite"
+      href="#ref-2">[2]</a> provides a theoretical account of why coverage (the probability
+      mass assigned to high-quality responses) matters for subsequent posttraining and best-of-$N$ sampling.
+      More directly, Kang et al. <a class="cite" href="#ref-3">[3]</a> show that higher pass@$1$ after SFT
+      does not reliably predict better performance after RL on mathematical reasoning tasks, whereas large-$k$
+      pass@$k$ is a stronger predictor. These findings motivate us to investigate how coverage changes during
+      robot policy pretraining and how it affects subsequent posttraining, although the underlying learning
+      dynamics need not be the same.</p>
+  </div>
+</details>
+
+<p>Large-$k$ pass@$k$ does not universally rank checkpoints for every RL algorithm or interaction budget. A
+  much earlier checkpoint may retain more coverage but have lower pass@$1$, so which initialization wins can
+  depend on the available budget. Our comparisons are mostly between checkpoints with similar pass@$1$
+  but different coverage.</p>
+
+<!-- ================================================================ 3 -->
+<h2 id="overfitting"><span class="num">3.</span>Why does coverage decline?<br>Finite-data overfitting in
+  diffusion-based policies</h2>
+
+<p>What causes coverage to decline during continued supervised training? The pattern suggests finite-data
+  overfitting. Here we study where it occurs in a diffusion policy and why some initial conditions suffer more
+  than others.</p>
+
+<p>Prior work on diffusion models has shown that the empirical denoising objective admits a memorizing
+  solution (Gu et al. <a class="cite" href="#ref-4">[4]</a>), and that training can exhibit different
+  timescales, with generalization emerging early and memorization occurring much later (Bonnaire et al. <a
+  class="cite" href="#ref-5">[5]</a>). Robot diffusion policies, however, are conditioned on dense visual
+  observations, and their generated actions must support stable multi-step, closed-loop interactions with the
+  environment.</p>
+
+<p>We first test whether continued training leads policies to increasingly fit their respective training
+  splits. We train two policies on disjoint demonstration sets and evaluate them on the same held-out
+  observations with matched sampling noise. Their predictions initially converge, but begin to diverge later
+  in training. Meanwhile, each policy's generated actions become increasingly biased toward its own training
+  split, as measured by nearest-neighbor distances relative to held-out expert actions. Together, these
+  results suggest a transition from learning shared structure to fitting the empirical training split.</p>
+
+<figure class="small">
+  <video class="autoplay" src="static/videos/split.mp4" poster="static/videos/split_poster.jpg" muted loop
+    playsinline controls preload="metadata"></video>
+  <figcaption><b>Independent splits expose dataset-specific fitting.</b> Two policies trained on disjoint
+    200-demonstration splits of Threading first agree more on the same held-out inputs, then drift apart, each
+    toward its own training split (nearest-neighbor ratio below 1).</figcaption>
+</figure>
+
+<p>We next localize overfitting across diffusion noise levels. We measure denoising error at each noise level
+  on training and held-out demonstrations. While training error decreases at every noise level, held-out error
+  deteriorates near the low-noise end. To test how this affects closed-loop performance, we do a
+  denoising-step intervention: in a 10-step DDIM sampler, we replace pairs of denoising calls from the late
+  checkpoint with the corresponding calls from an earlier checkpoint. Replacing any of the first four two-step
+  bands has little effect, while replacing the final two calls restores most of the earlier checkpoint's
+  pass@$10$ advantage at the expense of pass@$1$. Thus, much of the coverage–reliability difference between
+  these checkpoints arises from the low-noise denoising steps.</p>
+
+<figure class="wide">
+  <img src="static/images/fig11.png"
+    alt="Training and held-out denoising error across noise levels, and the denoising-step intervention.">
+  <figcaption><b>Later checkpoints have higher held-out denoising loss near the low-noise end, and the final
+    denoising calls drive the pass@$k$ difference.</b> (a) On training demonstrations, $\epsilon$-prediction
+    MSE decreases with further training at every noise level. (b) On unseen demonstrations, later checkpoints
+    are worse near the low-noise end. (c) Replacing any of the first four two-step bands (Q1–Q4) of the
+    epoch-800 checkpoint with epoch-200 weights has little effect; replacing the final two calls (Q5) restores
+    most of epoch 200's pass@$10$ advantage while reducing pass@$1$.</figcaption>
+</figure>
+
+<p>Observation conditioning further exacerbates late-training overfitting. Comparing an
+  observation-conditioned denoiser with an action-only denoiser trained on the same actions, we find that both
+  exhibit higher held-out error near the low-noise end after continued training. However, the deterioration
+  begins at higher noise levels and is substantially larger for the observation-conditioned model.</p>
+
+<p>The effect is also more pronounced for observations with sparse training support. We estimate local
+  training support using distances to training trajectories in simulator-state space. For observations with sparser training support, held-out denoising error begins to deteriorate at higher noise levels and increases more sharply near the low-noise end. One intuition is that low diffusion noise restricts the set of compatible training
+  actions, while sparse observation support further limits the number of relevant examples. Combined, these
+  leave fewer training examples compatible with both the observation and the noisy action.</p>
+
+<div class="figpair">
+  <figure>
+    <img src="static/images/fig12.png"
+      alt="Relative change in held-out denoising error for observation-conditioned and action-only models.">
+    <figcaption><b>Observation conditioning exacerbates late-training deterioration.</b> Relative change in
+      held-out $\epsilon$-prediction MSE from epoch 200 to 800, image-conditioned vs. action-only models on
+      the same noisy action chunks; positive means worse at epoch 800.</figcaption>
+  </figure>
+  <figure>
+    <img src="static/images/fig13.png"
+      alt="Relative change in held-out denoising error grouped by local training support.">
+    <figcaption><b>Sparser local support deteriorates more, and from higher noise.</b> The same relative
+      change, for held-out queries split into equal thirds by local conditioning support.</figcaption>
+  </figure>
+</div>
+
+<!-- ================================================================ 4 -->
+<h2 id="selection"><span class="num">4.</span>Can we choose a better checkpoint entirely offline?</h2>
+
+<p>The tradeoff raises a practical question: which checkpoint should we use? Measuring pass@$k$ requires many
+  closed-loop rollouts from the same initial conditions for every candidate checkpoint and is not feasible on
+  a real robot. Can we select a checkpoint entirely offline?</p>
+
+<p>A natural first attempt is <strong>best-of-$k$ validation action error</strong>: sample $k$ action chunks
+  at each held-out observation and measure how close the best sample gets to the demonstrated action. This
+  seems like an offline analogue of pass@$k$.</p>
+
+<figure class="small">
+  <video class="autoplay" src="static/videos/bok.mp4" poster="static/videos/bok_poster.jpg" muted loop
+    playsinline controls preload="metadata"></video>
+  <figcaption><b>Best-of-$k$ action error.</b> At a held-out observation, draw $k$ action chunks and keep the
+    error of the closest one to the demonstrated action (the star). More draws make a lucky sample more
+    likely, so the best-of-$k$ error shrinks.</figcaption>
+</figure>
+
+<figure class="medium">
+  <img src="static/images/fig3.png"
+    alt="Best-of-k validation action error and closed-loop pass@k across checkpoints.">
+  <figcaption><b>Best-of-$k$ action MSE selects earlier checkpoints than closed-loop pass@$k$ especially for large $k$.</b> (a)
+    Held-out best-of-$k$ action MSE across checkpoints. (b) Closed-loop pass@$k$ across the same checkpoints.
+    Hollow markers indicate the minimum MSE in (a) and the maximum pass@$k$ in (b). As $k$ increases, both
+    optima shift earlier, but the best-of-$k$ minimum precedes the pass@$k$ peak, with a larger separation at
+    higher $k$.</figcaption>
+</figure>
+
+<p>As with pass@$k$, best-of-$k$ validation action MSE favors earlier checkpoints at larger $k$. But it
+  selects too early, especially at large $k$. Finding one good action sample at an
+  individual observation is not the same as executing a successful trajectory. Very early in training, a
+  policy may already produce lucky draws of action samples close to the expert, while most of its other
+  samples are too poor for stable closed-loop execution. Later training can improve typical
+  action quality and closed-loop reliability, even after the quality of the best sampled action has
+  started to get worse.</p>
+
+<p>This is easiest to see in an animation of action samples at the same held-out observation. Early in
+  training, the sample cloud is spread out: some actions land very close to the expert, but many are far away.
+  As training continues, the cloud contracts. Its typical sample quality improves, yet its closest sample can
+  drift farther from the expert. Looking only at the mean loses the favorable tail; looking only at the
+  minimum ignores all the bad samples in between.</p>
+
+<figure class="small">
+  <video class="autoplay" src="static/videos/chunk.mp4" poster="static/videos/chunk_poster.jpg" muted loop
+    playsinline controls preload="metadata"></video>
+  <figcaption><b>Action samples at one held-out Mug Cleanup state, over training.</b> Left: the 64 sampled
+    action chunks drawn into the scene. Middle: the same samples projected with PCA; the star is the
+    demonstrated action. Right: mean and best-of-64 action error.</figcaption>
+</figure>
+
+<p>This also helps make sense of a somewhat counterintuitive feature of behavior cloning: more training can
+  still improve task success even while some held-out losses deteriorate. “Overfitting” is not a single number
+  that tells us everything about closed-loop behavior. Improved typical actions can help pass@$1$, while
+  deterioration in the favorable tail can hurt coverage. Those two changes can happen at the same time.</p>
+
+<p>So rather than reducing all action samples to their mean or minimum
+  error, we look at the <em>full distribution of held-out action errors</em>. The lower error
+  quantiles tell us whether the policy can occasionally sample actions close to the expert, while the median
+  and higher quantiles reflect the accuracy of its typical and less favorable samples. In our experiments,
+  lower quantiles typically favor earlier checkpoints, while higher quantiles keep improving later.</p>
+
+<p>Our offline coverage–reliability criterion turns that observation into a
+  checkpoint-selection rule. For each error quantile, we normalize its log-MSE score across available training
+  checkpoints. We average the lower half of the quantiles into a <em>coverage</em> score and the upper half
+  into a <em>reliability</em> score. Then we select the checkpoint with the best worst score:
+  one that is not especially poor on either side. There is no closed-loop rollout, no need to choose a
+  particular $k$, and no tradeoff weight to tune between coverage and reliability.</p>
+
+<figure class="small">
+  <video class="autoplay" src="static/videos/criterion.mp4" poster="static/videos/criterion_poster.jpg" muted
+    loop playsinline controls preload="metadata"></video>
+  <figcaption><b>From error quantiles to a checkpoint.</b> Lower error quantiles favor earlier checkpoints,
+    while higher quantiles keep improving later. Each percentile is rescaled so its best checkpoint scores 0
+    and its worst scores 1; the lower and upper halves are averaged into coverage and reliability scores; the
+    criterion picks the checkpoint minimizing the larger of the two (epoch 350 on Threading).</figcaption>
+</figure>
+
+<p>Across the evaluated MimicGen and RoboCasa settings, this simple rule selects checkpoints close to an
+  oracle that balances the measured pass@$k$ curves. Those checkpoints also provide stronger
+  posttraining initializations than simply taking the final supervised checkpoint. It does not promise the
+  optimal checkpoint for every RL budget, but it gives us a practical way to avoid losing coverage we may
+  need later.</p>
+
+<!-- ================================================================ 5 -->
+<h2 id="jointaug"><span class="num">5.</span>Can we raise the coverage–reliability frontier?</h2>
+
+<p>Checkpoint selection can only choose among the policies
+  produced by a given training run. Can we instead change training so that
+  reliability improves without giving up coverage?</p>
+
+<p>The overfitting experiments suggest one place to intervene: the finite demonstration dataset. Continued
+  supervised training repeatedly returns to the same observation–action pairs, allowing the policy to fit the empirical dataset
+  increasingly closely. Generating novel and plausible pairs could expand supervision beyond those examples <span role="img" aria-label="light bulb">💡</span>.</p>
+
+<p>The intuition is easiest to see through Gaussian diffusion. The demonstrations sample a broader expert
+  distribution. After adding Gaussian noise, the empirical distribution becomes a mixture of Gaussians
+  centered on those examples. At high noise these components overlap, but near the clean end they become
+  sharp, separated peaks. The animation illustrates the idea: new, coherent observation–action samples can
+  help "connect" the isolated islands left by finite data, rather than repeatedly fitting only the observed
+  pairs.</p>
+
+<figure class="small">
+  <video class="autoplay" src="static/videos/toy.mp4" poster="static/videos/toy_poster.jpg" muted loop
+    playsinline controls preload="metadata"></video>
+  <figcaption><b>Toy illustration (synthetic 2D points).</b> A finite training set, blurred by decreasing noise,
+    becomes a set of isolated peaks; adding generated observation–action samples fills the gaps at the same
+    low noise.</figcaption>
+</figure>
+
+<p>Why not simply perturb the demonstrated actions, as in PostBC <a
+  class="cite" href="#ref-6">[6]</a>?
+  First, since observation conditioning exacerbates late-training overfitting, perturbing actions at the same
+  observations does not fully address the limited observation support. Second, such perturbations need to be scaled
+  carefully: a new action may not be compatible with the original observation. Instead, we want to generate
+  new observations together with compatible actions, letting their relationship be learned from the data.</p>
+
+<p>This motivates <strong>JointAug</strong>. We train a separate generative model of the joint
+  observation–action distribution and use it to sample fresh $(\tilde o,\tilde a)$ pairs. The policy then
+  trains on an equal mixture of real and generated pairs, with the same architecture and behavior-cloning
+  loss.</p>
+
+<p>Since the generator can also overfit, we sample from a short window of its checkpoints, starting when
+  generated actions first become closer to training than to held-out expert actions in a nearest-neighbor
+  comparison. Intuitively, mixing these checkpoints can be viewed as interpolating between the population-like structure
+  learned earlier and the increasingly empirical distribution learned later.</p>
+
+<figure class="small">
+  <video class="autoplay" src="static/videos/compare.mp4" poster="static/videos/compare_poster.jpg" muted loop
+    playsinline controls preload="metadata"></video>
+  <figcaption><b>The same held-out Mug Cleanup state, baseline vs. JointAug.</b> Both runs share one PCA basis
+    and one error color scale. JointAug's samples stay spread around the demonstrated action while its errors
+    keep falling.</figcaption>
+</figure>
+
+<p>Joint generation of high-dimensional images and actions is costly at VLA scale. On RoboCasa, we therefore
+  use a lighter action-only variant: estimate action covariance from a selected policy checkpoint and use it
+  to perturb training actions, without tuning a separate perturbation scale.</p>
+
+<p>JointAug preserves large-$k$ pass@$k$ while maintaining, and sometimes improving pass@$1$. Its final
+  checkpoints provide stronger RL initializations than standard late pretraining. On RoboCasa, the action-only
+  variant similarly preserves coverage and yields SFT performance comparable to finetuning from an earlier
+  selected checkpoint.</p>
+
+<figure class="small">
+  <img src="static/images/fig5_6.png"
+    alt="Pass@1 and pass@10 during pretraining for Baseline DP, PostBC, and JointAug, and posttraining from three initializations.">
+  <figcaption><b>Generative augmentation preserves coverage during pretraining and produces stronger
+    checkpoints for posttraining.</b> Top: pass@$10$ (solid) and pass@$1$ (dashed) during pretraining. Bottom:
+    posttraining (residual RL on MimicGen, SFT on RoboCasa) from the baseline checkpoint selected by our
+    criterion, the final baseline checkpoint, and the final checkpoint of the augmentation run.</figcaption>
+</figure>
+
+<!-- ================================================================ 6 -->
+<h2 id="real-robot"><span class="num">6.</span>Coverage–reliability dynamics on a real robot</h2>
+
+<p>Simulation allows precise resets and repeated trials. Does the same coverage–reliability pattern appear
+  in policies trained from real-robot data? <span role="img" aria-label="mechanical arm">🦾</span></p>
+
+<p>We test a challenging version of Push-T. The robot has only wrist-mounted camera views for
+  visual input, controls the end effector in full 6-DoF, and has to move the T-shaped block using
+  non-prehensile contact. We collect 740 human demonstrations, using 680 for training and 60 for validation,
+  and train a diffusion policy for 200 epochs.</p>
+
+<p>Even without using robot rollouts to choose a checkpoint, the held-out action-error quantiles show the same
+  split: favorable-tail quality favors an earlier checkpoint, while other parts of the error distribution
+  improve later. Our offline criterion selects epoch 46. We then evaluate it and the final checkpoint at epoch 200 on 20 fixed starting configurations, with five attempts per
+  configuration.</p>
+
+<p>The selected checkpoint achieves 62% pass@$1$ versus 52% for the final checkpoint, and
+  95% pass@$5$ versus 75%. In this particular real-robot experiment, the earlier checkpoint
+  is better on both measures, not just coverage.</p>
+
+<figure class="wide">
+  <img src="static/images/fig7.png"
+    alt="Real-robot Push-T setup, validation action error, offline checkpoint selection, and measured pass@1 and pass@5.">
+  <figcaption><b>Real-robot Push-T.</b> (a) Task setup. (b) Best-of-$k$ validation action MSE across training
+    epochs. (c) Quantiles of validation action error across training epochs. (d) Normalized coverage and
+    reliability scores, with the selected checkpoint at epoch 46. (e) Pass@$1$ and pass@$5$ of the selected
+    (epoch 46) and final (epoch 200) checkpoints over 20 fixed initial states.</figcaption>
+</figure>
+
+<figure class="wide robot">
+  <div class="robot-bar">
+    <label for="robot-config">Start configuration</label>
+    <select id="robot-config">
+      <option value="1">Configuration 1</option>
+      <option value="2">Configuration 2</option>
+      <option value="3">Configuration 3</option>
+      <option value="4">Configuration 4</option>
+      <option value="5">Configuration 5</option>
+      <option value="6">Configuration 6</option>
+      <option value="7">Configuration 7</option>
+      <option value="8">Configuration 8</option>
+      <option value="9">Configuration 9</option>
+      <option value="10">Configuration 10</option>
+      <option value="11">Configuration 11</option>
+      <option value="12">Configuration 12</option>
+      <option value="13">Configuration 13</option>
+      <option value="14">Configuration 14</option>
+      <option value="15">Configuration 15</option>
+      <option value="16">Configuration 16</option>
+      <option value="17">Configuration 17</option>
+      <option value="18">Configuration 18</option>
+      <option value="19">Configuration 19</option>
+      <option value="20">Configuration 20</option>
+    </select>
+    <span class="robot-note">Videos are sped up 3&times;</span>
+  </div>
+  <video id="robot-video" class="autoplay" src="static/videos/robot/config01.mp4"
+    poster="static/videos/robot/config01_poster.jpg" muted loop playsinline controls preload="metadata"></video>
+  <div class="robot-rows">
+    <span><b>Top row:</b> selected checkpoint, <span id="robot-sel">3</span>/5 succeeded</span>
+    <span><b>Bottom row:</b> final checkpoint, <span id="robot-fin">4</span>/5 succeeded</span>
+  </div>
+  <figcaption><b>Real-robot rollouts, five attempts per checkpoint from each of 20 fixed start configurations.</b></figcaption>
+</figure>
+
+<!-- ================================================================ 7 -->
+<h2 id="future"><span class="num">7.</span>Future directions</h2>
+
+<p>One future direction is to jointly develop better data collection strategies and better pretraining
+  methods. Demonstration datasets should have both broad coverage of task conditions and sufficient
+  local density. Training objectives, architectures, and optimization strategies should improve
+  reliability without sacrificing coverage or generalization. We hope this work draws more attention to how robot policies evolve throughout training, rather than focusing solely on their final performance.</p>
+
+<p>Another direction is to understand more precisely how policy distributions evolve during supervised
+  pretraining and how those changes affect subsequent posttraining. This could guide both data
+  collection and policy optimization. More broadly, the results motivate a unified view of pretraining and
+  posttraining: pretrained policies should be evaluated not only by their immediate performance, but also by
+  how effectively they can be improved and adapted to new tasks, robot embodiments, sensing
+  modalities, etc.</p>
+
+<div class="endmark" aria-hidden="true"><img src="static/images/yoda.png" alt=""></div>
+
+<details class="refs" id="references">
+  <summary>References</summary>
+  <ol>
+    <li id="ref-1">Jacob Mitchell Springer, Sachin Goyal, Kaiyue Wen, Tanishq Kumar, Xiang Yue, Sadhika
+      Malladi, Graham Neubig, Aditi Raghunathan. <a
+      href="https://proceedings.mlr.press/v267/springer25a.html">Overtrained Language Models Are Harder to
+      Fine-Tune.</a> ICML 2025.</li>
+    <li id="ref-2">Fan Chen, Audrey Huang, Noah Golowich, Sadhika Malladi, Adam Block, Jordan Ash, Akshay
+      Krishnamurthy, Dylan Foster. <a
+      href="https://proceedings.iclr.cc/paper_files/paper/2026/hash/b6494b9e8d16b789526c7a69ad807870-Abstract-Conference.html">The
+      Coverage Principle: How Pre-Training Enables Post-Training.</a> ICLR 2026.</li>
+    <li id="ref-3">Feiyang Kang, Michael Kuchnik, Karthik Padthe, Marin Vlastelica, Ruoxi Jia, Carole-Jean Wu,
+      Newsha Ardalani. <a
+      href="https://proceedings.iclr.cc/paper_files/paper/2026/hash/5d6ae8ba43ecb378030753c4408ef9bd-Abstract-Conference.html">Quagmires
+      in SFT-RL Post-Training: When High SFT Scores Mislead and What to Use Instead.</a> ICLR 2026.</li>
+    <li id="ref-4">Xiangming Gu, Chao Du, Tianyu Pang, Chongxuan Li, Min Lin, Ye Wang. <a
+      href="https://arxiv.org/abs/2310.02664">On Memorization in Diffusion Models.</a> arXiv:2310.02664,
+      2023.</li>
+    <li id="ref-5">Tony Bonnaire, Raphaël Urfin, Giulio Biroli, Marc Mézard. <a
+      href="https://arxiv.org/abs/2505.17638">Why Diffusion Models Don't Memorize: The Role of Implicit
+      Dynamical Regularization in Training.</a> NeurIPS 2025.</li>
+    <li id="ref-6">Andrew Wagenmaker, Perry Dong, Raymond Tsao, Chelsea Finn, Sergey Levine. <a
+      href="https://arxiv.org/abs/2512.16911">Posterior Behavioral Cloning: Pretraining BC Policies for
+      Efficient RL Finetuning.</a> arXiv:2512.16911, 2025.</li>
+  </ol>
+</details>
+
+</main>
+</div>
+
+<script>
+  // math
+  document.addEventListener("DOMContentLoaded", () => {
+    renderMathInElement(document.body, {
+      delimiters: [{ left: "$$", right: "$$", display: true }, { left: "$", right: "$", display: false }],
+      throwOnError: false,
+    });
+  });
+
+  // citations open the collapsed reference list, then jump to the entry
+  document.querySelectorAll("a.cite").forEach((a) => {
+    a.addEventListener("click", () => { document.getElementById("references").open = true; });
+  });
+  if (location.hash.startsWith("#ref-")) document.getElementById("references").open = true;
+
+  // videos play only while on screen
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const vids = document.querySelectorAll("video.autoplay");
+  if (!reduce && "IntersectionObserver" in window) {
+    const vo = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { e.target.play().catch(() => {}); } else { e.target.pause(); } });
+    }, { threshold: 0.35 });
+    vids.forEach((v) => vo.observe(v));
+  }
+
+  // real-robot rollouts: one synced grid video per start configuration
+  const ROBOT = {"1":[3,4],"2":[3,5],"3":[2,0],"4":[3,0],"5":[1,1],"6":[2,0],"7":[2,0],"8":[1,4],"9":[0,3],"10":[4,4],"11":[2,2],"12":[4,2],"13":[4,5],"14":[4,3],"15":[4,3],"16":[5,5],"17":[5,5],"18":[3,1],"19":[5,5],"20":[5,0]};
+  const sel = document.getElementById("robot-config"), rv = document.getElementById("robot-video");
+  sel.addEventListener("change", () => {
+    const n = String(sel.value).padStart(2, "0");
+    rv.poster = `static/videos/robot/config${n}_poster.jpg`;
+    rv.src = `static/videos/robot/config${n}.mp4`;
+    document.getElementById("robot-sel").textContent = ROBOT[sel.value][0];
+    document.getElementById("robot-fin").textContent = ROBOT[sel.value][1];
+    rv.play().catch(() => {});
+  });
+
+  // highlight the section being read
+  const links = [...document.querySelectorAll("nav.toc a")];
+  const secs = links.map((l) => document.querySelector(l.getAttribute("href")));
+  const mark = () => {
+    let cur = 0;
+    secs.forEach((s, i) => { if (s.getBoundingClientRect().top < window.innerHeight * 0.3) cur = i; });
+    links.forEach((l, i) => l.classList.toggle("active", i === cur && window.scrollY > 200));
+  };
+  window.addEventListener("scroll", mark, { passive: true });
+  mark();
+</script>
 </body>
 </html>
