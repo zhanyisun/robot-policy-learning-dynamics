@@ -244,9 +244,11 @@
 <h2 id="dynamics"><span class="num">1.</span>Does more pretraining make a policy better at everything? <span role="img" aria-label="thinking face">🤔</span></h2>
 
 <p>We start with a simple question: does supervised pretraining improve success uniformly across initial
-  conditions, or can improvements on some conditions come at the expense of others? Mean task success
+  conditions, or can improvements on some conditions come at the expense of others? 
+  <!-- Mean task success
   cannot tell us. Two policies can have similar mean success rate even if one is moderately successful everywhere
-  and the other is very reliable on a small set of easy conditions but rarely succeeds elsewhere.</p>
+  and the other is very reliable on a small set of easy conditions but rarely succeeds elsewhere. -->
+</p>
 
 <p>Pass@$k$ is commonly used to evaluate language models on tasks with verifiable answers, including code
   generation and mathematical reasoning. The idea is to generate $k$ independent solutions and ask whether any
@@ -254,10 +256,10 @@
   held-out initial task configuration, reset to it, and run $k$ independent rollouts, recording whether at
   least one succeeds. We then average over many starting configurations.</p>
 
-<p>In language models, different solutions arise from sampling the next-token distribution. In generative
+<!-- <p>In language models, different solutions arise from sampling the next-token distribution. In generative
   robot policies, different initial noise draws produce different action chunks, which lead to different
   closed-loop trajectories; randomness in environment dynamics can introduce additional variation. Therefore,
-  even with a deterministic sampler, sampling different initial noise produces different rollouts.</p>
+  even with a deterministic sampler, sampling different initial noise produces different rollouts.</p> -->
 
 <p>At $k = 1$, pass@$k$ is the usual mean task-success rate, which we refer to as
   <strong>reliability</strong>. Larger-$k$ pass@$k$ reflects whether success remains possible across a broad
@@ -270,17 +272,18 @@
   on 200 demonstrations per MimicGen task, and π<sub>0.5</sub> on 65 RoboCasa tasks with 100
   demonstrations per task. In both regimes, we observe the same pattern: pass@$1$ continues to improve, or converges,
   after larger-$k$ pass@$k$ has already peaked and begun to fall. The larger $k$ is, the earlier its
-  best checkpoint tends to occur. The result can be seen in the pretraining panels of the <a href="#fig-opening">opening figure</a>. One
-  thing I learned from these experiments is that evaluation curves can be very smooth when evaluating on
+  optimum tends to occur. The result can be seen in the pretraining panels of the <a href="#fig-opening">opening figure</a>. 
+  <!-- One thing I learned from these experiments is that evaluation curves can be very smooth when evaluating on
   enough initial conditions (500 for all our MimicGen experiments). In the past, I often saw large
   fluctuations in the success curves of diffusion and flow-matching policies evaluated on smaller sets of
   initial conditions. Some of those fluctuations could come from the stochasticity of policy rollouts,
-  exacerbated by limited evaluation conditions.</p>
+  exacerbated by limited evaluation conditions. -->
+</p>
 
 <p>What changes? Early in training, success improves across most of the evaluation distribution. Later, the
-  outcomes become more polarized: conditions on which the robot already succeeds become more reliable, while some harder conditions become even less likely to succeed. In the Threading task, we can see this
+  outcomes become more <em>polarized</em>: conditions on which the robot already succeeds become more reliable, while some harder conditions become even less likely to succeed. In the Threading task, we can see this
   directly by counting successes over repeated attempts at each fixed starting configuration: later in
-  training, the fraction of configurations with <em>zero</em> successes rises, even as the fraction with many
+  training, the fraction of configurations with zero successes rises, even as the fraction with many
   successes also rises. The animation below shows all 500 starting configurations, each shaded by how often
   its 32 attempts succeed.</p>
 
@@ -315,7 +318,7 @@
 <h2 id="posttraining"><span class="num">2.</span>How policy coverage affects posttraining</h2>
 
 <p>Suppose two pretrained checkpoints have nearly the same pass@$1$, but one has substantially higher
-  large-$k$ pass@$k$. Which is more useful for posttraining under a fixed data or interaction budget? To
+  large-$k$ pass@$k$. Which is more useful for posttraining under fixed data or interaction budget? To
   investigate this, we compare the final checkpoint against an earlier checkpoint selected by our offline
   coverage–reliability balance criterion (introduced in <a href="#selection">Section 4</a>). The selected
   checkpoint typically retains higher coverage while maintaining comparable pass@$1$. We evaluate this
@@ -329,9 +332,9 @@
   rollouts from each checkpoint. Critics trained with higher-coverage rollouts rank candidate actions more
   accurately at held-out states.</p>
 
-<p>The difference persists when posttraining updates the policy. With <strong>residual RL</strong>, finetuning
+<p>Same thing happens when posttraining updates the policy. With <strong>residual RL</strong>, finetuning
   from the earlier checkpoint reaches higher success under the same online interaction budget. The effect is
-  not limited to a frozen generative policy plus a learned correction: in experiments with <strong>full-policy
+  not limited to a frozen generative policy plus a learned residual correction: in experiments with <strong>full-policy
   RL finetuning</strong>, where the action generator is updated directly, the earlier selected checkpoint also
   does better on four of five tasks. Check out the paper for comprehensive results!</p>
 
@@ -362,6 +365,26 @@
   much earlier checkpoint may retain more coverage but have lower pass@$1$, so which initialization wins can
   depend on the available budget. Our comparisons are mostly between checkpoints with similar pass@$1$
   but different coverage.</p>
+
+<details class="aside">
+  <summary>What about even earlier checkpoints?</summary>
+  <div class="body">
+    <p>To examine more broadly how pretraining coverage and reliability affect residual RL finetuning, we
+      additionally finetune an even earlier checkpoint (epoch 200 / 100 / 100 for Threading / Hammer
+      Cleanup / Mug Cleanup) that retains more coverage but has lower pass@$1$ before the converged value. Its performance relative to the later two checkpoints depends on the available online budget and the exact RL finetuning implementation: on Hammer
+      Cleanup it is the strongest initialization throughout, on Mug Cleanup it starts slower but ends highest, and
+      on Threading it takes longer to warm up but eventually surpasses the final checkpoint.</p>
+    <figure>
+      <img src="static/images/fig_early_ckpt.png"
+        alt="Pretraining pass@k with the finetuned checkpoints marked, and residual RL from each of them, for three tasks.">
+      <figcaption><b>Residual RL across the coverage–reliability tradeoff.</b> Top: pass@$k$ during pretraining,
+        with a dashed line at each finetuned checkpoint in the color of its RL curve below. Bottom: residual RL from
+        the even earlier checkpoint, the checkpoint selected by our criterion, the final checkpoint, and the final
+        checkpoint of the JointAug run (<a href="#jointaug">Section 5</a>; a separate pretraining run, so it has no
+        line above).</figcaption>
+    </figure>
+  </div>
+</details>
 
 <!-- ================================================================ 3 -->
 <h2 id="overfitting"><span class="num">3.</span>Why does coverage decline?<br>Finite-data overfitting in
@@ -469,8 +492,7 @@
 </figure>
 
 <p>As with pass@$k$, best-of-$k$ validation action MSE favors earlier checkpoints at larger $k$. But it
-  selects too early, especially at large $k$. Finding one good action sample at an
-  individual observation is not the same as executing a successful trajectory. Very early in training, a
+  selects too early, especially at large $k$. Very early in training, a
   policy may already produce lucky draws of action samples close to the expert, while most of its other
   samples are too poor for stable closed-loop execution. Later training can improve typical
   action quality and closed-loop reliability, even after the quality of the best sampled action has
@@ -496,20 +518,34 @@
   deterioration in the favorable tail can hurt coverage. Those two changes can happen at the same time.</p>
 
 <p>So rather than reducing all action samples to their mean or minimum
-  error, we look at the <em>full distribution of held-out action errors</em>. The lower error
+  error, we look at the <em>full distribution of held-out action errors</em>. For a held-out pair
+  $(o_i,a_i^\star)$ and checkpoint $\tau$, we draw $M$ action chunks $A_j\sim\pi_\tau(\cdot\mid o_i)$, let
+  $Q_{i,\tau}(u)$ be the $u$-quantile of their errors $\{\ell(A_j,a_i^\star)\}_{j=1}^{M}$, and average over the
+  $N$ held-out pairs:
+  $$\bar Q_\tau(u)=\frac{1}{N}\sum_{i=1}^{N}Q_{i,\tau}(u).$$
+  The lower error
   quantiles tell us whether the policy can occasionally sample actions close to the expert, while the median
   and higher quantiles reflect the accuracy of its typical and less favorable samples. In our experiments,
   lower quantiles typically favor earlier checkpoints, while higher quantiles keep improving later.</p>
 
 <p>Our offline coverage–reliability criterion turns that observation into a
   checkpoint-selection rule. For each error quantile, we normalize its log-MSE score across available training
-  checkpoints. We average the lower half of the quantiles into a <em>coverage</em> score and the upper half
-  into a <em>reliability</em> score. Then we select the checkpoint with the best worst score:
-  one that is not especially poor on either side. There is no closed-loop rollout, no need to choose a
+  checkpoints, up to a training budget $H$. Raw errors at different quantiles can differ by a lot, so the normalization operation puts every quantile on a common scale, where the best checkpoint at that quantile scores 0 and the
+  worst scores 1:
+  $$r_{\tau\mid H}(u)=\frac{\log\bar Q_\tau(u)-\min_{s\le H}\log\bar Q_s(u)}{\max_{\tau'\le H}\log\bar
+  Q_{\tau'}(u)-\min_{s\le H}\log\bar Q_s(u)}.$$
+  We average the lower half of the quantiles into a <em>coverage</em> score and the upper half
+  into a <em>reliability</em> score:
+  $$r_{\mathrm{cov}\mid H}(\tau)=\operatorname*{mean}_{u\in\mathcal U,\;u<0.5}r_{\tau\mid H}(u),
+  \qquad r_{\mathrm{rel}\mid H}(\tau)=\operatorname*{mean}_{u\in\mathcal U,\;u\ge 0.5}r_{\tau\mid H}(u).$$
+  Then we select the checkpoint with the best worst score, one that is not especially poor on either side:
+  $$\tau^\star_H=\arg\min_{\tau\le H}\;\max\bigl\{r_{\mathrm{cov}\mid H}(\tau),\,
+  r_{\mathrm{rel}\mid H}(\tau)\bigr\}.$$
+  There is no closed-loop rollout, no need to choose a
   particular $k$, and no tradeoff weight to tune between coverage and reliability.</p>
 
 <figure class="small">
-  <video class="autoplay" src="static/videos/criterion.mp4" poster="static/videos/criterion_poster.jpg" muted
+  <video class="autoplay" src="static/videos/criterion_eqs.mp4" poster="static/videos/criterion_eqs_poster.jpg" muted
     loop playsinline controls preload="metadata"></video>
   <figcaption><b>From error quantiles to a checkpoint.</b> Lower error quantiles favor earlier checkpoints,
     while higher quantiles keep improving later. Each percentile is rescaled so its best checkpoint scores 0
@@ -519,7 +555,7 @@
 
 <p>Across the evaluated MimicGen and RoboCasa settings, this simple rule selects checkpoints close to an
   oracle that balances the measured pass@$k$ curves. Those checkpoints also provide stronger
-  posttraining initializations than simply taking the final supervised checkpoint. It does not promise the
+  posttraining initializations than simply taking the final supervised checkpoint. In our experiments, we split the quantile profile at the median ($u = 0.5$), which divides coverage and reliability evenly without introducing another tuned hypreparameter. This is a simple heuristic, it does not imply that coverage and reliability separate exactly at the median or that this selects the
   optimal checkpoint for every RL budget, but it gives us a practical way to avoid losing coverage we may
   need later.</p>
 
@@ -561,10 +597,10 @@
   trains on an equal mixture of real and generated pairs, with the same architecture and behavior-cloning
   loss.</p>
 
-<p>Since the generator can also overfit, we sample from a short window of its checkpoints, starting when
+<!-- <p>Since the generator can also overfit, we sample from a short window of its checkpoints, starting when
   generated actions first become closer to training than to held-out expert actions in a nearest-neighbor
   comparison. Intuitively, mixing these checkpoints can be viewed as interpolating between the population-like structure
-  learned earlier and the increasingly empirical distribution learned later.</p>
+  learned earlier and the increasingly empirical distribution learned later.</p> -->
 
 <figure class="small">
   <video class="autoplay" src="static/videos/compare.mp4" poster="static/videos/compare_poster.jpg" muted loop
@@ -658,16 +694,18 @@
 </figure>
 
 <!-- ================================================================ 7 -->
-<h2 id="future"><span class="num">7.</span>Future directions</h2>
+<h2 id="future"><span class="num">7.</span>Discussion and Future directions</h2>
 
 <p>One future direction is to jointly develop better data collection strategies and better pretraining
-  methods. Demonstration datasets should have both broad coverage of task conditions and sufficient
-  local density. Training objectives, architectures, and optimization strategies should improve
+  methods. Demonstration datasets should have both broad <em>coverage</em> of task conditions and sufficient
+  local <em>density</em>. Training objectives, architectures, and optimization strategies should improve
   reliability without sacrificing coverage or generalization. We hope this work draws more attention to how robot policies evolve throughout training, rather than focusing solely on their final performance.</p>
 
 <p>Another direction is to understand more precisely how policy distributions evolve during supervised
   pretraining and how those changes affect subsequent posttraining. This could guide both data
-  collection and policy optimization. More broadly, the results motivate a unified view of pretraining and
+  collection and policy optimization. Recent large-scale real-robot efforts, such as Sunday's
+  ACT-2 <a class="cite" href="#ref-7">[7]</a> and Generalist's GEN-0 <a class="cite" href="#ref-8">[8]</a>, are beginning to reveal relationships between pretraining data, 
+  offline evaluation metrics, and downstream performance. Together with our findings, these developments motivate a unified view of pretraining and
   posttraining: pretrained policies should be evaluated not only by their immediate performance, but also by
   how effectively they can be improved and adapted to new tasks, robot embodiments, sensing
   modalities, etc.</p>
@@ -698,6 +736,10 @@
     <li id="ref-6">Andrew Wagenmaker, Perry Dong, Raymond Tsao, Chelsea Finn, Sergey Levine. <a
       href="https://arxiv.org/abs/2512.16911">Posterior Behavioral Cloning: Pretraining BC Policies for
       Efficient RL Finetuning.</a> arXiv:2512.16911, 2025.</li>
+    <li id="ref-7">Sunday Robotics. <a href="https://www.sunday.ai/blog/act-2-preview">ACT-2 Preview:
+      Generalizing Reliability.</a> Sunday Robotics Blog, July 2026.</li>
+    <li id="ref-8">Generalist Team. <a href="https://generalistai.com/blog/gen-0">GEN-0: Embodied Foundation
+      Models That Scale with Physical Interaction.</a> Generalist AI Blog, November 2025.</li>
   </ol>
 </details>
 
